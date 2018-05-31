@@ -5,6 +5,7 @@ from PIL import Image
 import random
 import numpy as np
 
+
 class Random2DTranslation(object):
     """
     With a probability, first increase image size to (1 + 1/8), and then perform random crop.
@@ -14,6 +15,7 @@ class Random2DTranslation(object):
         width (int): target width.
         p (float): probability of performing this transformation. Default: 0.5.
     """
+
     def __init__(self, height, width, p=0.5, interpolation=Image.BILINEAR):
         self.height = height
         self.width = width
@@ -39,5 +41,7 @@ class Random2DTranslation(object):
         croped_img = resized_img.crop((x1, y1, x1 + self.width, y1 + self.height))
         return croped_img
 
+
 if __name__ == '__main__':
     pass
+

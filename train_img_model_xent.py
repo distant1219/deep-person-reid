@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+# from __future__ import print_function, absolute_import
 import os
 import sys
 import time
@@ -58,16 +58,18 @@ parser.add_argument('--evaluate', action='store_true', help="evaluation only")
 parser.add_argument('--eval-step', type=int, default=-1,
                     help="run evaluation for every N epochs (set to -1 to test after training)")
 parser.add_argument('--save-dir', type=str, default='log')
-parser.add_argument('--use-cpu', action='store_true', help="use cpu")
+parser.add_argument('--use-cpu', action='store_true', help="use cpu")  # action='store true' 表示解析到这个参数时,为true
 parser.add_argument('--gpu-devices', default='0', type=str, help='gpu device ids for CUDA_VISIBLE_DEVICES')
 
 args = parser.parse_args()
+
 
 def main():
     torch.manual_seed(args.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
     use_gpu = torch.cuda.is_available()
-    if args.use_cpu: use_gpu = False
+    if args.use_cpu:
+        use_gpu = False
 
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.save_dir, 'log_train.txt'))
@@ -78,7 +80,7 @@ def main():
     if use_gpu:
         print("Currently using GPU {}".format(args.gpu_devices))
         cudnn.benchmark = True
-        torch.cuda.manual_seed_all(args.seed)
+        torch.cuda.manual_seed_all(args.seed)  # 这两句是干什么的
     else:
         print("Currently using CPU (GPU is highly recommended)")
 
@@ -98,7 +100,7 @@ def main():
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    pin_memory = True if use_gpu else False
+    pin_memory = True if use_gpu else False  # pin_memory是啥
 
     trainloader = DataLoader(
         ImageDataset(dataset.train, transform=transform_train),
@@ -120,7 +122,7 @@ def main():
 
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dataset.num_train_pids, loss={'xent'})
-    print("Model size: {:.5f}M".format(sum(p.numel() for p in model.parameters())/1000000.0))
+    print("Model size: {:.5f}M".format(sum(p.numel() for p in model.parameters()) / 1000000.0))
 
     criterion = CrossEntropyLabelSmooth(num_classes=dataset.num_train_pids, use_gpu=use_gpu)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -128,6 +130,9 @@ def main():
         scheduler = lr_scheduler.StepLR(optimizer, step_size=args.stepsize, gamma=args.gamma)
     start_epoch = args.start_epoch
 
+    """
+    从某个点恢复训练
+    """
     if args.resume:
         print("Loading checkpoint from '{}'".format(args.resume))
         checkpoint = torch.load(args.resume)
@@ -141,22 +146,29 @@ def main():
         print("Evaluate only")
         test(model, queryloader, galleryloader, use_gpu)
         return
-
+    '''
+    开始训练过程了
+    '''
     start_time = time.time()
     best_rank1 = -np.inf
 
     for epoch in range(start_epoch, args.max_epoch):
-        print("==> Epoch {}/{}".format(epoch+1, args.max_epoch))
-        
+        print("==> Epoch {}/{}".format(epoch + 1, args.max_epoch))
+
         train(model, criterion, optimizer, trainloader, use_gpu)
-        
-        if args.stepsize > 0: scheduler.step()
-        
-        if args.eval_step > 0 and (epoch+1) % args.eval_step == 0 or (epoch+1) == args.max_epoch:
+
+        if args.stepsize > 0:
+            scheduler.step()
+
+        '''
+        每隔n步,评测一下
+        '''
+        if args.eval_step > 0 and (epoch + 1) % args.eval_step == 0 or (epoch + 1) == args.max_epoch:
             print("==> Test")
             rank1 = test(model, queryloader, galleryloader, use_gpu)
             is_best = rank1 > best_rank1
-            if is_best: best_rank1 = rank1
+            if is_best:
+                best_rank1 = rank1
 
             if use_gpu:
                 state_dict = model.module.state_dict()
@@ -166,11 +178,12 @@ def main():
                 'state_dict': state_dict,
                 'rank1': rank1,
                 'epoch': epoch,
-            }, is_best, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch+1) + '.pth.tar'))
+            }, is_best, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch + 1) + '.pth.tar'))
 
     elapsed = round(time.time() - start_time)
     elapsed = str(datetime.timedelta(seconds=elapsed))
     print("Finished. Total elapsed time (h:m:s): {}".format(elapsed))
+
 
 def train(model, criterion, optimizer, trainloader, use_gpu):
     model.train()
@@ -182,13 +195,16 @@ def train(model, criterion, optimizer, trainloader, use_gpu):
         imgs, pids = Variable(imgs), Variable(pids)
         outputs = model(imgs)
         loss = criterion(outputs, pids)
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
         losses.update(loss.data[0], pids.size(0))
 
-        if (batch_idx+1) % args.print_freq == 0:
-            print("Batch {}/{}\t Loss {:.6f} ({:.6f})".format(batch_idx+1, len(trainloader), losses.val, losses.avg))
+        if (batch_idx + 1) % args.print_freq == 0:
+            print("Batch {}/{}\t Loss {:.6f} ({:.6f})".format(batch_idx + 1, len(trainloader), losses.val, losses.avg))
+
 
 def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     model.eval()
@@ -239,17 +255,11 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
-        print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
+        print("Rank-{:<3}: {:.1%}".format(r, cmc[r - 1]))
     print("------------------")
 
     return cmc[0]
 
+
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
